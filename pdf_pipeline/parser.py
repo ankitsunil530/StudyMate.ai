@@ -2,13 +2,17 @@ import os
 import fitz  # PyMuPDF
 from PIL import Image
 
-import pytesseract
+try:
+    import pytesseract
+except:
+    pytesseract = None
 import cv2
 import numpy as np
 from transformers import BlipProcessor, BlipForConditionalGeneration
 
 # 🔹 Set Tesseract path
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+if pytesseract:
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 class PDFParser:
     def __init__(self, max_chunk_chars=1000):
