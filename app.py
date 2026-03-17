@@ -458,4 +458,6 @@ Return ONLY valid JSON, no other text.
 # Run App
 # --------------------------------------------------
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    print(f"🚀 Running on port {port}")
+    app.run(host="0.0.0.0", port=port)
