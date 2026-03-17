@@ -1,7 +1,3 @@
-PyMuPDF
-Pillow
-torch
-transformers
 Flask
 flask-cors
 flask-bcrypt
@@ -11,7 +7,7 @@ pymongo
 requests
 cloudinary
 google-genai
-pytesseract
-opencv-python
-numpy
 gunicorn
+PyMuPDF
+Pillow
+numpy
