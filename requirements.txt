@@ -8,3 +8,6 @@ PyMuPDF
 Pillow
 flask-bcrypt
 flask-jwt-extended
+numpy
+opencv
+scipy
