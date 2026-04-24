@@ -1,19 +1,17 @@
-import faiss
 import numpy as np
 
 class VectorStore:
-    def __init__(self):
-        self.index = None
-        self.texts = []
-
     def build_index(self, embeddings, texts):
-        dim = len(embeddings[0])
-        self.index = faiss.IndexFlatL2(dim)
-        self.index.add(np.array(embeddings).astype('float32'))
+        self.embeddings = np.array(embeddings)
         self.texts = texts
 
     def search(self, query_embedding, k=5):
-        D, I = self.index.search(
-            np.array([query_embedding]).astype('float32'), k
+        query = np.array(query_embedding)
+
+        # cosine similarity
+        similarities = np.dot(self.embeddings, query) / (
+            np.linalg.norm(self.embeddings, axis=1) * np.linalg.norm(query) + 1e-10
         )
-        return [self.texts[i] for i in I[0]]
+
+        top_k_idx = np.argsort(similarities)[-k:][::-1]
+        return [self.texts[i] for i in top_k_idx]
