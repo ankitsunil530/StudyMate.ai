@@ -1,7 +1,11 @@
-from sentence_transformers import SentenceTransformer
+import google.generativeai as genai
+import os
 
-# load once (global)
-model = SentenceTransformer("all-MiniLM-L6-v2")
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 def get_embedding(text):
-    return model.encode(text).tolist()
+    response = genai.embed_content(
+        model="models/embedding-001",
+        content=text
+    )
+    return response["embedding"]
