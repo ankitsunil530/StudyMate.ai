@@ -17,7 +17,7 @@ from bson import ObjectId
 from dotenv import load_dotenv
 import cloudinary
 import cloudinary.uploader
-import google.generativeai as genai
+from google import genai
 from pdf_pipeline.parser import PDFParser
 from flask_bcrypt import Bcrypt
 
