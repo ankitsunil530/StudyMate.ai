@@ -18,7 +18,6 @@ from dotenv import load_dotenv
 import cloudinary
 import cloudinary.uploader
 from google import genai
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 from pdf_pipeline.parser import PDFParser
 from flask_bcrypt import Bcrypt
 
@@ -93,8 +92,7 @@ cloudinary.config(
 # --------------------------------------------------
 # Gemini Config
 # --------------------------------------------------
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-1.5-flash")
+gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 GEMINI_MODEL = "gemini-2.5-flash"
 
 # --------------------------------------------------
