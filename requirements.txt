@@ -7,4 +7,3 @@ google-generativeai
 PyMuPDF
 flask-bcrypt
 flask-jwt-extended
-python-3.10.13
