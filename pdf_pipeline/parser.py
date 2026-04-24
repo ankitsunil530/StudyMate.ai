@@ -2,7 +2,7 @@ import os
 import fitz  # PyMuPDF
 from PIL import Image
 import numpy as np
-import torch
+# import torch
 
 IMAGE_DIR = "/tmp/images" if os.environ.get("RENDER") else "images"
 
