@@ -17,7 +17,7 @@ try:
 except:
     cv2 = None
 
-from transformers import BlipProcessor, BlipForConditionalGeneration
+# from transformers import BlipProcessor, BlipForConditionalGeneration
 
 # ======================================================
 # 🔹 Device Setup
