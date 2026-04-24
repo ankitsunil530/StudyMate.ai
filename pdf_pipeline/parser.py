@@ -3,7 +3,9 @@ import fitz  # PyMuPDF
 from PIL import Image
 import numpy as np
 import torch
+
 IMAGE_DIR = "/tmp/images" if os.environ.get("RENDER") else "images"
+
 # Optional imports
 try:
     import pytesseract
@@ -18,12 +20,13 @@ except:
 from transformers import BlipProcessor, BlipForConditionalGeneration
 
 # ======================================================
-# 🔹 Setup Device (GPU if available)
+# 🔹 Device Setup
 # ======================================================
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_CACHE = "/tmp" if os.environ.get("RENDER") else None
+
 # ======================================================
-# 🔹 Load BLIP Model Globally (IMPORTANT for performance)
+# 🔹 Load BLIP Model (Global)
 # ======================================================
 print("🔄 Loading BLIP model...")
 processor = BlipProcessor.from_pretrained(
@@ -36,34 +39,46 @@ model = BlipForConditionalGeneration.from_pretrained(
 )
 model.to(DEVICE)
 model.eval()
-
 print("✅ BLIP loaded on", DEVICE)
 
 # ======================================================
-# 🔹 Set Tesseract path (Windows only)
+# 🔹 Tesseract Setup (Windows)
 # ======================================================
 if pytesseract and os.name == "nt":
     pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
 class PDFParser:
-    def __init__(self, max_chunk_chars=1000):
-        self.max_chunk_chars = max_chunk_chars
+    def __init__(self, chunk_size=500, overlap=100):
+        self.chunk_size = chunk_size
+        self.overlap = overlap
 
     # ======================================================
-    # 🔹 Process Single Page
+    # 🔹 Chunking Function (RAG)
+    # ======================================================
+    def chunk_text(self, text):
+        words = text.split()
+        chunks = []
+
+        for i in range(0, len(words), self.chunk_size - self.overlap):
+            chunk = " ".join(words[i:i + self.chunk_size])
+            chunks.append(chunk)
+
+        return chunks
+
+    # ======================================================
+    # 🔹 Process Single Page (UPDATED)
     # ======================================================
     def process_single_page(self, pdf_path, page_no):
         try:
             doc = fitz.open(pdf_path)
         except Exception as e:
-            return f"Error opening PDF: {str(e)}"
+            return {"error": f"Error opening PDF: {str(e)}"}
 
         if page_no > len(doc) or page_no < 1:
-            return "Invalid Page Number"
+            return {"error": "Invalid Page Number"}
 
         page = doc[page_no - 1]
-        
         os.makedirs(IMAGE_DIR, exist_ok=True)
 
         # Extract content
@@ -77,7 +92,15 @@ class PDFParser:
         for key, result in image_results.items():
             final_text = final_text.replace(f"[IMAGE_{key}]", result)
 
-        return final_text.strip()
+        final_text = final_text.strip()
+
+        # 🔥 RAG READY: create chunks
+        chunks = self.chunk_text(final_text)
+
+        return {
+            "full_text": final_text,
+            "chunks": chunks
+        }
 
     # ======================================================
     # 🔹 Extract Page Content
@@ -145,11 +168,8 @@ class PDFParser:
                 results[key] = f"(Image load error: {str(e)})"
                 continue
 
-            # =========================
-            # OCR PART
-            # =========================
+            # OCR
             ocr_text = ""
-
             if pytesseract and cv2:
                 try:
                     gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
@@ -157,18 +177,12 @@ class PDFParser:
                 except Exception as e:
                     print(f"OCR Error: {e}")
 
-            # =========================
-            # Decision: OCR vs Caption
-            # =========================
+            # Decision
             if ocr_text and len(ocr_text.strip()) > 15:
                 results[key] = f"(Text in Image: {ocr_text})"
             else:
-                # =========================
-                # BLIP Captioning
-                # =========================
                 try:
                     inputs = processor(images=image, return_tensors="pt").to(DEVICE)
-
                     with torch.no_grad():
                         output = model.generate(**inputs, max_new_tokens=30)
 
@@ -178,9 +192,7 @@ class PDFParser:
                 except Exception as e:
                     results[key] = f"(Caption error: {str(e)})"
 
-            # =========================
-            # Cleanup (important)
-            # =========================
+            # Cleanup
             try:
                 os.remove(img_path)
             except:

@@ -23,7 +23,8 @@ from flask_bcrypt import Bcrypt
 
 from flask_jwt_extended import JWTManager
 from bson.errors import InvalidId
-
+from rag.embedding import get_embedding
+from rag.vector_store import VectorStore
 from flask_jwt_extended import (
     JWTManager,
     get_jwt_identity,
@@ -39,11 +40,8 @@ app = Flask(__name__)
 # CORS FIX: Proper configuration for credentials
 CORS(
     app,
-    origins=["http://localhost:5173", "http://localhost:3000"],
+    origins=["*"],  # ya specific vercel URL baad me
     supports_credentials=True,
-    allow_headers=["Content-Type", "Authorization"],
-    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    max_age=3600
 )
 
 # JWT Config
@@ -264,7 +262,14 @@ def parse_page():
             with open(temp_path, "wb") as f:
                 f.write(r.content)
 
-            page_text = pdf_parser.process_single_page(temp_path, page_no)
+            result = pdf_parser.process_single_page(temp_path, page_no)
+
+            # error handle
+            if "error" in result:
+                return jsonify({"error": result["error"]}), 400
+
+            page_text = result["full_text"]
+            chunks = result["chunks"]
 
         finally:
             if os.path.exists(temp_path):
@@ -290,6 +295,31 @@ def parse_page():
                 }
             }
         )
+        from rag.embedding import get_embedding
+
+        chunk_data = []
+
+        for chunk in chunks:
+            try:
+                emb = get_embedding(chunk)
+                chunk_data.append({
+                        "text": chunk,
+                        "embedding": emb,
+                        "page": page_no
+                })
+            except Exception as e:
+                print("Embedding error:", e)
+
+        # save chunks in DB
+        if chunk_data:
+            db.pdfs.update_one(
+                {"_id": ObjectId(pdf_id)},
+                {
+                    "$push": {
+                        "chunks": {"$each": chunk_data}
+                    }
+                }
+            )
         # Cleanup
         if os.path.exists(temp_path):
             os.remove(temp_path)
@@ -423,9 +453,23 @@ def ask_doubt():
         if not pdf:
             return jsonify({"error": "PDF not found"}), 404
         # Fetch page text
-        page = next((p for p in pdf.get("pages", []) if p["pageNumber"] == page_no), None)
-        if not page:
-            return jsonify({"error": "Page not parsed yet"}), 400
+        chunks = pdf.get("chunks", [])
+
+        if not chunks:
+           return jsonify({"error": "No chunks found. Please parse pages first."}), 400
+
+        texts = [c["text"] for c in chunks]
+        embeddings = [c["embedding"] for c in chunks]
+
+        store = VectorStore()
+        store.build_index(embeddings, texts)
+
+        query_embedding = get_embedding(query)
+
+        relevant_chunks = store.search(query_embedding, k=5)
+
+        context = "\n\n".join(relevant_chunks)
+        
         # Build last 5 chat turns
         history = pdf.get("chatHistory", [])
         recent_history = history[-10:]
@@ -436,21 +480,26 @@ def ask_doubt():
         # Build prompt with context and language
         prompt = f"""
 LANGUAGE: {language} (hinglish = Hindi+English mix, hindi = pure Hindi, english = English)
-<PAGE_CONTEXT>
-Page {page_no}
-{page['text']}
-</PAGE_CONTEXT>
-<PREVIOUS_CONVERSATION>
+
+You are a helpful teacher.
+
+Use ONLY the context below.
+If answer not found, say "Not found in document".
+
+CONTEXT:
+{context}
+
+PREVIOUS CONVERSATION:
 {history_text}
-</PREVIOUS_CONVERSATION>
-<CURRENT_DOUBT>
+
+QUESTION:
 {query}
-</CURRENT_DOUBT>
-Answer clearly like a teacher in the requested language. Use Markdown formatting:
-- Use ## for main topics, ### for subtopics
+
+Answer clearly like a teacher.
+Use Markdown formatting:
+- Use ## for main topics
 - Use **bold** for important terms
-- Use bullet points (-) and numbered lists
-- Make it well-structured and organized
+- Use bullet points
 """
         # Call Gemini API
         response = gemini_client.models.generate_content(
@@ -797,7 +846,22 @@ def add_conversation_message(conversation_id):
     if owner and owner != user_id:
         return jsonify({"error": "Not allowed"}), 403
 
-    page = next((p for p in pdf.get("pages", []) if p["pageNumber"] == page_no), None)
+    chunks = pdf.get("chunks", [])
+
+    if not chunks:
+       return jsonify({"error": "No chunks found. Please parse pages first."}), 400
+
+    texts = [c["text"] for c in chunks]
+    embeddings = [c["embedding"] for c in chunks]
+
+    store = VectorStore()
+    store.build_index(embeddings, texts)
+
+    query_embedding = get_embedding(query)
+
+    relevant_chunks = store.search(query_embedding, k=5)
+
+    context = "\n\n".join(relevant_chunks)
     if not page:
         return jsonify({"error": "Page not parsed yet"}), 400
 
@@ -808,22 +872,22 @@ def add_conversation_message(conversation_id):
         history_text += f"\n<{role}>\n{msg.get('text', '')}\n</{role}>\n"
 
     prompt = f"""
-LANGUAGE: {language} (hinglish = Hindi+English mix, hindi = pure Hindi, english = English)
-<PAGE_CONTEXT>
-Page {page_no}
-{page.get('text', '')}
-</PAGE_CONTEXT>
-<PREVIOUS_CONVERSATION>
-{history_text}
-</PREVIOUS_CONVERSATION>
-<CURRENT_DOUBT>
+LANGUAGE: {language}
+
+You are a helpful teacher.
+
+STRICT RULE:
+- Answer ONLY from the given context
+- If answer not found → say "Not found in document"
+- Do NOT use outside knowledge
+
+CONTEXT:
+{context}
+
+QUESTION:
 {query}
-</CURRENT_DOUBT>
-Answer clearly like a teacher in the requested language. Use Markdown formatting:
-- Use ## for main topics, ### for subtopics
-- Use **bold** for important terms
-- Use bullet points (-) and numbered lists
-- Make it well-structured and organized
+
+Give clear, structured answer.
 """
 
     response = gemini_client.models.generate_content(
@@ -861,10 +925,7 @@ def me():
 # Run App
 # --------------------------------------------------
 if __name__ == "__main__":
-   
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Running on port {port}")
     app.run(host="0.0.0.0", port=port)
-
-    app.run(port=5000, debug=True)
 
