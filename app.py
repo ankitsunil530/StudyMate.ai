@@ -17,7 +17,7 @@ from bson import ObjectId
 from dotenv import load_dotenv
 import cloudinary
 import cloudinary.uploader
-from google import genai
+import google.generativeai as genai
 from pdf_pipeline.parser import PDFParser
 from flask_bcrypt import Bcrypt
 
@@ -92,8 +92,8 @@ cloudinary.config(
 # --------------------------------------------------
 # Gemini Config
 # --------------------------------------------------
-gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-GEMINI_MODEL = "gemini-2.5-flash"
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # --------------------------------------------------
 # Helpers
@@ -277,10 +277,7 @@ def parse_page():
         # Gemini Prompt
         prompt = build_student_prompt(page_text, language)
         # Gemini Call
-        response = gemini_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
+        response = model.generate_content(prompt)
         explanation = response.text or "Unable to generate explanation."
         # Save to DB
         db.pdfs.update_one(
@@ -502,10 +499,7 @@ Use Markdown formatting:
 - Use bullet points
 """
         # Call Gemini API
-        response = gemini_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
+        response = model.generate_content(prompt)
         answer = response.text or "Unable to generate answer. Please try again."
         # Save Q&A to DB
         new_entries = [
@@ -586,10 +580,7 @@ Return ONLY valid JSON, no other text.
 """
         
         # Call Gemini API
-        response = gemini_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
+        response = model.generate_content(prompt)
         quiz_text = response.text or "{}"
         
         # Try to parse JSON (Gemini might wrap it in markdown)
@@ -683,10 +674,7 @@ FORMAT (JSON):
 Return ONLY valid JSON, no other text.
 """
 
-        response = gemini_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
+        response = model.generate_content(prompt)
 
         pack_text = _strip_markdown_code_fences(response.text or "{}")
         pack_text = _extract_first_json_block(pack_text)
@@ -890,10 +878,7 @@ QUESTION:
 Give clear, structured answer.
 """
 
-    response = gemini_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt
-    )
+    response = model.generate_content(prompt)
     answer = response.text or "Unable to generate answer. Please try again."
 
     now = _utc_iso()
