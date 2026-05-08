@@ -1,4 +1,7 @@
+Flask
 gunicorn
+requests
+certifi
 flask-cors
 pymongo
 python-dotenv
@@ -9,4 +12,4 @@ Pillow
 flask-bcrypt
 flask-jwt-extended
 numpy
-opencv-python
+opencv-python-headless

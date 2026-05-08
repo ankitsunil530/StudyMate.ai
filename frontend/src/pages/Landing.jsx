@@ -16,23 +16,25 @@ import {
 import ThemeToggle from "../components/ThemeToggle";
 
 export default function Landing() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() =>
+    Boolean(localStorage.getItem("userToken"))
+  );
   const [profileOpen, setProfileOpen] = useState(false);
-  const [userName, setUserName] = useState("");
-  const [showWelcome, setShowWelcome] = useState(false);
+  const [userName, setUserName] = useState(() =>
+    localStorage.getItem("userToken")
+      ? localStorage.getItem("userName") || "User"
+      : ""
+  );
+  const [showWelcome, setShowWelcome] = useState(() =>
+    Boolean(localStorage.getItem("userToken"))
+  );
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem("userToken");
-    const user = localStorage.getItem("userName");
-    if (token) {
-      setIsLoggedIn(true);
-      setUserName(user || "User");
-      setShowWelcome(true);
-      const t = setTimeout(() => setShowWelcome(false), 2500);
-      return () => clearTimeout(t);
-    }
-  }, []);
+    if (!showWelcome) return;
+    const t = setTimeout(() => setShowWelcome(false), 2500);
+    return () => clearTimeout(t);
+  }, [showWelcome]);
 
   const steps = useMemo(
     () => [

@@ -1,18 +1,3 @@
-// Example in React (Dashboard.jsx)
-//import api, { uploadPDF } from '../services/api';
-
-const handleUpload = async (file) => {
-  const formData = new FormData();
-  formData.append("file", file);
-  
-  try {
-    const res = await uploadPDF(formData);
-    console.log("Success:", res.data.pdf_id);
-  } catch (err) {
-    console.error("Error:", err);
-  }
-};
-
 import { API_BASE_URL } from '../config/api';
 const BASE_URL = API_BASE_URL;
 

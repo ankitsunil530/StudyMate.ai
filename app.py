@@ -23,10 +23,7 @@ from flask_bcrypt import Bcrypt
 
 from flask_jwt_extended import JWTManager
 from bson.errors import InvalidId
-from rag.embedding import get_embedding
-from rag.vector_store import VectorStore
 from flask_jwt_extended import (
-    JWTManager,
     get_jwt_identity,
     jwt_required,
     verify_jwt_in_request,
@@ -37,11 +34,28 @@ from flask_jwt_extended import (
 load_dotenv()
 app = Flask(__name__)
 
-# CORS FIX: Proper configuration for credentials
+def _get_cors_origins():
+    origins = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ]
+    configured = os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_URL") or ""
+    origins.extend(
+        origin.strip().rstrip("/")
+        for origin in configured.split(",")
+        if origin.strip()
+    )
+    return sorted(set(origins))
+
+# CORS FIX: Proper configuration for credentials.
+# On Hugging Face, set CORS_ORIGINS to your frontend URL(s), comma-separated.
 CORS(
     app,
-    origins=["*"],  # ya specific vercel URL baad me
+    origins=_get_cors_origins(),
     supports_credentials=True,
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    max_age=3600
 )
 
 # JWT Config
@@ -54,12 +68,19 @@ bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 
 # --------------------------------------------------
+mongo_uri = os.getenv("MONGO_URI")
+if not mongo_uri:
+    raise RuntimeError("MONGO_URI environment variable is required")
+
 # MongoDB Atlas
 # --------------------------------------------------
 client = MongoClient(
-    os.getenv("MONGO_URI"),
+    mongo_uri,
     tls=True,
-    connectTimeoutMS=30000,
+    tlsCAFile=certifi.where(),
+    connect=False,
+    connectTimeoutMS=10000,
+    serverSelectionTimeoutMS=10000,
     socketTimeoutMS=30000,
     retryWrites=True
 )
@@ -92,8 +113,13 @@ cloudinary.config(
 # --------------------------------------------------
 # Gemini Config
 # --------------------------------------------------
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-1.5-flash")
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+if not gemini_api_key:
+    raise RuntimeError("GEMINI_API_KEY environment variable is required")
+
+genai.configure(api_key=gemini_api_key)
+GEMINI_MODEL = "gemini-2.5-flash"
+gemini_model = genai.GenerativeModel(GEMINI_MODEL)
 
 # --------------------------------------------------
 # Helpers
@@ -138,6 +164,10 @@ def _extract_first_json_block(text):
 
 def _utc_iso():
     return datetime.now(timezone.utc).isoformat()
+
+def _generate_gemini_text(prompt):
+    response = gemini_model.generate_content(prompt)
+    return getattr(response, "text", "") or ""
 
 def _get_optional_user_id():
     try:
@@ -193,12 +223,18 @@ CONTENT:
 def home():
     return jsonify({"message": "StudyMate.ai Backend is running! 🚀"}), 200
 
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
+
 @app.route("/upload", methods=["POST"])
 def upload_pdf():
     try:
         if "file" not in request.files:
             return jsonify({"error": "File missing"}), 400
         file = request.files["file"]
+        if not file.filename.lower().endswith(".pdf"):
+            return jsonify({"error": "Only PDF allowed"}), 400
         upload_result = cloudinary.uploader.upload(
             file,
             resource_type="raw",
@@ -222,7 +258,8 @@ def upload_pdf():
             "pdf_id": str(result.inserted_id)
         }), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/parse-page", methods=["POST"])
 def parse_page():
@@ -268,8 +305,7 @@ def parse_page():
             if "error" in result:
                 return jsonify({"error": result["error"]}), 400
 
-            page_text = result["full_text"]
-            chunks = result["chunks"]
+            page_text = result.get("full_text", "")
 
         finally:
             if os.path.exists(temp_path):
@@ -277,8 +313,7 @@ def parse_page():
         # Gemini Prompt
         prompt = build_student_prompt(page_text, language)
         # Gemini Call
-        response = model.generate_content(prompt)
-        explanation = response.text or "Unable to generate explanation."
+        explanation = _generate_gemini_text(prompt) or "Unable to generate explanation."
         # Save to DB
         db.pdfs.update_one(
             {"_id": ObjectId(pdf_id)},
@@ -292,34 +327,6 @@ def parse_page():
                 }
             }
         )
-        from rag.embedding import get_embedding
-
-        chunk_data = []
-
-        for chunk in chunks:
-            try:
-                emb = get_embedding(chunk)
-                chunk_data.append({
-                        "text": chunk,
-                        "embedding": emb,
-                        "page": page_no
-                })
-            except Exception as e:
-                print("Embedding error:", e)
-
-        # save chunks in DB
-        if chunk_data:
-            db.pdfs.update_one(
-                {"_id": ObjectId(pdf_id)},
-                {
-                    "$push": {
-                        "chunks": {"$each": chunk_data}
-                    }
-                }
-            )
-        # Cleanup
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
         return jsonify({
             "status": "newly_parsed",
             "pageNumber": page_no,
@@ -327,7 +334,8 @@ def parse_page():
             "explanation": explanation
         }), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 # ---------------- DOUBT CHAT ----------------
 def format_recent_history(history, limit=5):
@@ -389,7 +397,8 @@ def get_pdf_info(pdf_id):
             "pdfUrl": pdf_entry.get("pdfUrl", "")
         }), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/pdf/<pdf_id>/page/<int:page_no>/image", methods=["GET"])
 def get_pdf_page_image(pdf_id, page_no):
@@ -435,7 +444,8 @@ def get_pdf_page_image(pdf_id, page_no):
         
         return jsonify({"image": img_url}), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/ask-doubt", methods=["POST"])
 def ask_doubt():
@@ -450,23 +460,9 @@ def ask_doubt():
         if not pdf:
             return jsonify({"error": "PDF not found"}), 404
         # Fetch page text
-        chunks = pdf.get("chunks", [])
-
-        if not chunks:
-           return jsonify({"error": "No chunks found. Please parse pages first."}), 400
-
-        texts = [c["text"] for c in chunks]
-        embeddings = [c["embedding"] for c in chunks]
-
-        store = VectorStore()
-        store.build_index(embeddings, texts)
-
-        query_embedding = get_embedding(query)
-
-        relevant_chunks = store.search(query_embedding, k=5)
-
-        context = "\n\n".join(relevant_chunks)
-        
+        page = next((p for p in pdf.get("pages", []) if p["pageNumber"] == page_no), None)
+        if not page:
+            return jsonify({"error": "Page not parsed yet"}), 400
         # Build last 5 chat turns
         history = pdf.get("chatHistory", [])
         recent_history = history[-10:]
@@ -477,30 +473,24 @@ def ask_doubt():
         # Build prompt with context and language
         prompt = f"""
 LANGUAGE: {language} (hinglish = Hindi+English mix, hindi = pure Hindi, english = English)
-
-You are a helpful teacher.
-
-Use ONLY the context below.
-If answer not found, say "Not found in document".
-
-CONTEXT:
-{context}
-
-PREVIOUS CONVERSATION:
+<PAGE_CONTEXT>
+Page {page_no}
+{page['text']}
+</PAGE_CONTEXT>
+<PREVIOUS_CONVERSATION>
 {history_text}
-
-QUESTION:
+</PREVIOUS_CONVERSATION>
+<CURRENT_DOUBT>
 {query}
-
-Answer clearly like a teacher.
-Use Markdown formatting:
-- Use ## for main topics
+</CURRENT_DOUBT>
+Answer clearly like a teacher in the requested language. Use Markdown formatting:
+- Use ## for main topics, ### for subtopics
 - Use **bold** for important terms
-- Use bullet points
+- Use bullet points (-) and numbered lists
+- Make it well-structured and organized
 """
         # Call Gemini API
-        response = model.generate_content(prompt)
-        answer = response.text or "Unable to generate answer. Please try again."
+        answer = _generate_gemini_text(prompt) or "Unable to generate answer. Please try again."
         # Save Q&A to DB
         new_entries = [
             {"role": "user", "parts": [{"text": query}]},
@@ -512,8 +502,8 @@ Use Markdown formatting:
         )
         return jsonify({"answer": answer}), 200
     except Exception as e:
-        print("ask_doubt error:", e)
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/generate-quiz", methods=["POST"])
 def generate_quiz():
@@ -580,8 +570,7 @@ Return ONLY valid JSON, no other text.
 """
         
         # Call Gemini API
-        response = model.generate_content(prompt)
-        quiz_text = response.text or "{}"
+        quiz_text = _generate_gemini_text(prompt) or "{}"
         
         # Try to parse JSON (Gemini might wrap it in markdown)
         quiz_text = _strip_markdown_code_fences(quiz_text)
@@ -595,8 +584,8 @@ Return ONLY valid JSON, no other text.
         
         return jsonify({"quiz": quiz_data}), 200
     except Exception as e:
-        print("generate_quiz error:", e)
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 # ---------------- REVISION PACK ----------------
 @app.route("/generate-revision-pack", methods=["POST"])
@@ -674,9 +663,7 @@ FORMAT (JSON):
 Return ONLY valid JSON, no other text.
 """
 
-        response = model.generate_content(prompt)
-
-        pack_text = _strip_markdown_code_fences(response.text or "{}")
+        pack_text = _strip_markdown_code_fences(_generate_gemini_text(prompt) or "{}")
         pack_text = _extract_first_json_block(pack_text)
         try:
             pack_data = json.loads(pack_text)
@@ -699,8 +686,8 @@ Return ONLY valid JSON, no other text.
 
         return jsonify({"revision_pack": saved_pack}), 200
     except Exception as e:
-        print("generate_revision_pack error:", e)
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/pdf/<pdf_id>/revision-packs", methods=["GET"])
 def list_revision_packs(pdf_id):
@@ -711,7 +698,8 @@ def list_revision_packs(pdf_id):
         packs = list(reversed(pdf.get("revisionPacks", [])))
         return jsonify({"revision_packs": packs}), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 # --------------------------------------------------
 # Conversations (Saved chats)
@@ -726,7 +714,8 @@ def list_conversations():
         )
         return jsonify({"conversations": [_serialize_conversation(d) for d in docs]}), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/api/conversations", methods=["POST"])
 @jwt_required()
@@ -780,7 +769,8 @@ def create_conversation():
         conversation["_id"] = result.inserted_id
         return jsonify({"conversation": _serialize_conversation(conversation)}), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/api/conversations/<conversation_id>", methods=["GET"])
 @jwt_required()
@@ -834,22 +824,7 @@ def add_conversation_message(conversation_id):
     if owner and owner != user_id:
         return jsonify({"error": "Not allowed"}), 403
 
-    chunks = pdf.get("chunks", [])
-
-    if not chunks:
-       return jsonify({"error": "No chunks found. Please parse pages first."}), 400
-
-    texts = [c["text"] for c in chunks]
-    embeddings = [c["embedding"] for c in chunks]
-
-    store = VectorStore()
-    store.build_index(embeddings, texts)
-
-    query_embedding = get_embedding(query)
-
-    relevant_chunks = store.search(query_embedding, k=5)
-
-    context = "\n\n".join(relevant_chunks)
+    page = next((p for p in pdf.get("pages", []) if p["pageNumber"] == page_no), None)
     if not page:
         return jsonify({"error": "Page not parsed yet"}), 400
 
@@ -860,26 +835,25 @@ def add_conversation_message(conversation_id):
         history_text += f"\n<{role}>\n{msg.get('text', '')}\n</{role}>\n"
 
     prompt = f"""
-LANGUAGE: {language}
-
-You are a helpful teacher.
-
-STRICT RULE:
-- Answer ONLY from the given context
-- If answer not found → say "Not found in document"
-- Do NOT use outside knowledge
-
-CONTEXT:
-{context}
-
-QUESTION:
+LANGUAGE: {language} (hinglish = Hindi+English mix, hindi = pure Hindi, english = English)
+<PAGE_CONTEXT>
+Page {page_no}
+{page.get('text', '')}
+</PAGE_CONTEXT>
+<PREVIOUS_CONVERSATION>
+{history_text}
+</PREVIOUS_CONVERSATION>
+<CURRENT_DOUBT>
 {query}
-
-Give clear, structured answer.
+</CURRENT_DOUBT>
+Answer clearly like a teacher in the requested language. Use Markdown formatting:
+- Use ## for main topics, ### for subtopics
+- Use **bold** for important terms
+- Use bullet points (-) and numbered lists
+- Make it well-structured and organized
 """
 
-    response = model.generate_content(prompt)
-    answer = response.text or "Unable to generate answer. Please try again."
+    answer = _generate_gemini_text(prompt) or "Unable to generate answer. Please try again."
 
     now = _utc_iso()
     new_entries = [
@@ -910,7 +884,7 @@ def me():
 # Run App
 # --------------------------------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 7860))
     print(f"🚀 Running on port {port}")
     app.run(host="0.0.0.0", port=port)
 

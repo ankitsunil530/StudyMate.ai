@@ -205,6 +205,7 @@ import fitz  # PyMuPDF
 from PIL import Image
 import numpy as np
 
+# HF Spaces / local compatibility
 IMAGE_DIR = "/tmp/images" if os.environ.get("RENDER") else "images"
 
 # Optional imports
@@ -224,120 +225,158 @@ class PDFParser:
         self.chunk_size = chunk_size
         self.overlap = overlap
 
-    # 🔹 Chunking (RAG)
+    # 🔹 Chunking (RAG optimized)
     def chunk_text(self, text):
+        if not text:
+            return []
+
         words = text.split()
         chunks = []
 
-        for i in range(0, len(words), self.chunk_size - self.overlap):
-            chunk = " ".join(words[i:i + self.chunk_size])
-            chunks.append(chunk)
+        step = max(1, self.chunk_size - self.overlap)
+
+        for i in range(0, len(words), step):
+            chunk = " ".join(words[i:i + self.chunk_size]).strip()
+            if chunk:
+                chunks.append(chunk)
 
         return chunks
 
-    # 🔹 Process Page
+    # 🔹 Main Page Processing
     def process_single_page(self, pdf_path, page_no):
+        doc = None
         try:
             doc = fitz.open(pdf_path)
-        except Exception as e:
-            return {"error": f"Error opening PDF: {str(e)}"}
+        except Exception:
+            return {"error": "Error opening PDF"}
 
-        if page_no > len(doc) or page_no < 1:
-            return {"error": "Invalid Page Number"}
+        try:
+            if page_no > len(doc) or page_no < 1:
+                return {"error": "Invalid Page Number"}
 
-        page = doc[page_no - 1]
-        os.makedirs(IMAGE_DIR, exist_ok=True)
+            page = doc[page_no - 1]
 
-        raw_text, page_image_data = self.extract_page_content(page, page_no, doc)
+            # ensure image dir
+            os.makedirs(IMAGE_DIR, exist_ok=True)
 
-        image_results = self.process_images_for_page(page_image_data)
+            raw_text, page_image_data = self.extract_page_content(page, page_no, doc)
 
-        final_text = raw_text
-        for key, result in image_results.items():
-            final_text = final_text.replace(f"[IMAGE_{key}]", result)
+            # OCR processing
+            image_results = self.process_images_for_page(page_image_data)
 
-        final_text = final_text.strip()
+            # Replace image placeholders
+            final_text = raw_text
+            for key, result in image_results.items():
+                final_text = final_text.replace(f"[IMAGE_{key}]", result)
 
-        chunks = self.chunk_text(final_text)
+            final_text = final_text.strip()
 
-        return {
-            "full_text": final_text,
-            "chunks": chunks
-        }
+            # chunking
+            chunks = self.chunk_text(final_text)
 
-    # 🔹 Extract Content
+            return {
+                "full_text": final_text,
+                "chunks": chunks
+            }
+
+        finally:
+            if doc:
+                doc.close()
+
+    # 🔹 Extract text + images
     def extract_page_content(self, page, page_no, doc):
-        blocks = page.get_text("dict")["blocks"]
+        try:
+            blocks = page.get_text("dict").get("blocks", [])
+        except Exception:
+            return "", {}
+
         page_text = ""
         img_counter = 0
         page_image_data = {}
 
         for block in blocks:
-            if block.get("type") == 0:
+            block_type = block.get("type")
+
+            # 🟢 TEXT BLOCK
+            if block_type == 0:
                 for line in block.get("lines", []):
                     for span in line.get("spans", []):
                         page_text += span.get("text", "") + " "
 
-            elif block.get("type") == 1:
+            # 🟡 IMAGE BLOCK
+            elif block_type == 1:
                 img_counter += 1
                 img_name = f"page{page_no}_img{img_counter}"
 
                 image_bytes = None
                 ext = "png"
 
+                # Extract image from xref
                 if "xref" in block:
                     try:
                         base_image = doc.extract_image(block["xref"])
-                        image_bytes = base_image["image"]
-                        ext = base_image["ext"]
-                    except:
+                        image_bytes = base_image.get("image")
+                        ext = base_image.get("ext", "png")
+                    except Exception:
                         pass
 
+                # fallback
                 if image_bytes is None and "image" in block:
-                    image_bytes = block["image"]
+                    image_bytes = block.get("image")
                     ext = block.get("ext", "png")
 
                 if image_bytes:
-                    img_path = f"{IMAGE_DIR}/{img_name}.{ext}"
+                    img_path = os.path.join(IMAGE_DIR, f"{img_name}.{ext}")
+
                     try:
                         with open(img_path, "wb") as f:
                             f.write(image_bytes)
 
+                        # placeholder
                         page_text += f" [IMAGE_{img_name}] "
                         page_image_data[img_name] = img_path
 
                     except Exception as e:
-                        print(f"Error saving image: {e}")
+                        print("Image save error:", e)
 
         return page_text, page_image_data
 
-    # 🔹 Process Images (ONLY OCR)
+    # 🔹 OCR Processing
     def process_images_for_page(self, page_image_data):
         results = {}
 
         for key, img_path in page_image_data.items():
             try:
                 image = Image.open(img_path).convert("RGB")
-            except Exception as e:
-                results[key] = f"(Image load error: {str(e)})"
+            except Exception:
+                results[key] = "(Image load error)"
                 continue
 
             ocr_text = ""
+
+            # ✅ OCR only if available
             if pytesseract and cv2:
                 try:
                     gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
-                    ocr_text = pytesseract.image_to_string(gray, config="--psm 6").strip()
+                    ocr_text = pytesseract.image_to_string(
+                        gray,
+                        config="--psm 6"
+                    ).strip()
                 except Exception as e:
-                    print(f"OCR Error: {e}")
-
-            if ocr_text and len(ocr_text.strip()) > 10:
-                results[key] = f"(Text in Image: {ocr_text})"
+                    print("OCR Error:", e)
             else:
+                results[key] = "(OCR not available)"
+
+            # ✅ Final decision
+            if ocr_text and len(ocr_text) > 10:
+                results[key] = f"(Text in Image: {ocr_text})"
+            elif key not in results:
                 results[key] = "(Image content present)"
 
+            # cleanup
             try:
                 os.remove(img_path)
-            except:
+            except Exception:
                 pass
 
         return results

@@ -25,7 +25,12 @@ export default function Login() {
 
     try {
       const response = await loginUser(formData);
-      const data = await response.json();
+      let data;
+try {
+  data = await response.json();
+} catch {
+  data = {};
+}
 
       if (response.ok) {
         localStorage.setItem("userToken", data.token);

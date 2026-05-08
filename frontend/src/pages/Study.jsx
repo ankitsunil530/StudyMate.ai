@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import {
@@ -26,7 +26,6 @@ export default function Study() {
   const [totalPages, setTotalPages] = useState(1);
   const [pdfName, setPdfName] = useState("Loading...");
   const [explanation, setExplanation] = useState("");
-  const [rawText, setRawText] = useState("");
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +43,7 @@ export default function Study() {
   const [revisionLoading, setRevisionLoading] = useState(false);
   const [pdfPageImage, setPdfPageImage] = useState("");
   const [conversationId, setConversationId] = useState(null);
+  const conversationIdRef = useRef(null);
   const [chatSaveError, setChatSaveError] = useState("");
 
   // Load language from session
@@ -60,13 +60,22 @@ export default function Study() {
     setConversationId(id || null);
   }, [location.search]);
 
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
   // Fetch PDF info on mount
   useEffect(() => {
     if (!pdf_id) return;
     const fetchPdfInfo = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/pdf/${pdf_id}`);
-        const data = await response.json();
+        let data;
+try {
+  data = await response.json();
+} catch {
+  data = {};
+}
         if (response.ok) {
           setPdfName(data.fileName || "Unknown PDF");
           setTotalPages(data.totalPages || 1);
@@ -112,22 +121,27 @@ export default function Study() {
   useEffect(() => {
     setHasExplanation(false);
     setExplanation("");
-    setRawText("");
     setPdfPageImage("");
-    if (!conversationId) {
+
+    if (!conversationIdRef.current) {
       setMessages([]);
     }
-  }, [currentPage, conversationId]);
+  }, [currentPage]);
 
   // Fetch PDF page image when page changes
   useEffect(() => {
-    if (!pdf_id || !currentPage) return;
+    if (!pdf_id) return;
     const fetchPdfPageImage = async () => {
       try {
         const response = await fetch(
           `${API_BASE_URL}/pdf/${pdf_id}/page/${currentPage}/image`
         );
-        const data = await response.json();
+        let data;
+try {
+  data = await response.json();
+} catch {
+  data = {};
+}
         if (response.ok && data.image) {
           setPdfPageImage(data.image);
         }
@@ -166,7 +180,6 @@ export default function Study() {
 
       if (response.ok) {
         setExplanation(data.explanation || "No explanation available");
-        setRawText(data.text || "");
         setHasExplanation(true);
         // Reset chat only for non-saved chats
         if (!conversationId) setMessages([]);
@@ -193,7 +206,7 @@ export default function Study() {
       text: inputValue,
     };
 
-    setMessages((prevMessages) => [...prevMessages, userMessage]);
+    setMessages((prev) => [...prev.slice(-50), userMessage]);
     const queryText = inputValue;
     setInputValue("");
     setIsLoading(true);
@@ -304,7 +317,12 @@ export default function Study() {
         }),
       });
 
-      const data = await response.json();
+      let data;
+try {
+  data = await response.json();
+} catch {
+  data = {};
+}
       if (response.ok && data.quiz) {
         setQuiz(data.quiz);
       } else {
@@ -336,7 +354,12 @@ export default function Study() {
         }),
       });
 
-      const data = await response.json();
+      let data;
+try {
+  data = await response.json();
+} catch {
+  data = {};
+}
       if (response.ok && data.revision_pack) {
         setRevisionPack(data.revision_pack);
       } else {
@@ -542,7 +565,7 @@ export default function Study() {
                 }}
                 className="text-muted-foreground hover:text-foreground"
               >
-                âœ•
+                ✕
               </button>
             </div>
 
@@ -790,6 +813,7 @@ export default function Study() {
                 {!hasExplanation && !explanationLoading && (
                   <button
                     onClick={handleExplain}
+                    disabled={explanationLoading}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold study-btn"
                   >
                     <Play size={16} /> Explain
@@ -829,7 +853,7 @@ export default function Study() {
             </div>
 
             {/* Chat Messages */}
-            {messages.length === 0 ? (
+            {messages.length === 0 && !isLoading ? (
                 <div className="flex items-center justify-center h-full text-center">
                 <div>
                   <p className="font-medium mb-2 text-muted-foreground">
