@@ -392,34 +392,36 @@ try {
   const chatEnabled = hasExplanation || messages.length > 0 || !!conversationId;
 
   return (
-    <div className="study-theme h-screen overflow-hidden flex flex-col">
+    <div className="study-theme min-h-screen lg:h-screen lg:overflow-hidden flex flex-col">
       {/* Top Navbar */}
       <nav className="study-navbar shrink-0 w-full z-40 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BrainCircuit className="study-accent" size={24} />
-            <div>
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 lg:h-16 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0 w-full lg:w-auto">
+            <BrainCircuit className="study-accent shrink-0" size={24} />
+            <div className="min-w-0">
               <p className="text-xs study-text-muted font-medium">STUDYING</p>
-              <p className="text-sm font-bold">{pdfName}</p>
+              <p className="text-sm font-bold truncate max-w-[72vw] sm:max-w-[420px]">
+                {pdfName}
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full lg:w-auto justify-between lg:justify-end">
             <button
               onClick={() => setShowQuizModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-card/50 hover:bg-card transition-colors"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl border border-border bg-card/50 hover:bg-card transition-colors text-sm font-semibold"
             >
               <BookOpen size={18} /> Quiz
             </button>
             <button
               onClick={() => setShowRevisionModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-card/50 hover:bg-card transition-colors"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl border border-border bg-card/50 hover:bg-card transition-colors text-sm font-semibold"
             >
-              <FileText size={18} /> Revision
+              <FileText size={18} /> <span className="hidden sm:inline">Revision</span>
             </button>
-            <div className="text-center px-4 py-2 rounded-lg study-card">
+            <div className="text-center px-3 sm:px-4 py-2 rounded-lg study-card">
               <p className="text-xs study-text-muted">Page</p>
-              <p className="text-lg font-bold study-accent">
+              <p className="text-base sm:text-lg font-bold study-accent whitespace-nowrap">
                 {currentPage} / {totalPages}
               </p>
             </div>
@@ -433,9 +435,9 @@ try {
             </button>
             <button
               onClick={() => navigate("/")}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl transition-colors text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl transition-colors text-muted-foreground hover:text-foreground text-sm font-semibold"
             >
-              <LogOut size={18} /> Exit
+              <LogOut size={18} /> <span className="hidden sm:inline">Exit</span>
             </button>
           </div>
         </div>
@@ -443,8 +445,8 @@ try {
 
       {/* Quiz Modal */}
       {showQuizModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6">
-          <div className="study-panel rounded-2xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-6">
+          <div className="study-panel rounded-2xl p-4 sm:p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold study-accent">Generate Quiz</h2>
               <button
@@ -464,7 +466,7 @@ try {
                 <p className="text-muted-foreground mb-4">
                   Select pages you've studied to generate a quiz:
                 </p>
-                <div className="grid grid-cols-10 gap-2 mb-6">
+                <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 mb-6">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map(
                     (pageNum) => (
                       <button
@@ -553,8 +555,8 @@ try {
 
       {/* Revision Pack Modal */}
       {showRevisionModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6">
-          <div className="study-panel rounded-2xl p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-6">
+          <div className="study-panel rounded-2xl p-4 sm:p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold study-accent">Revision Pack</h2>
               <button
@@ -574,7 +576,7 @@ try {
                 <p className="text-muted-foreground mb-4">
                   Select pages to generate quick notes + flashcards:
                 </p>
-                <div className="grid grid-cols-10 gap-2 mb-6">
+                <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 mb-6">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map(
                     (pageNum) => (
                       <button
@@ -733,16 +735,16 @@ try {
         </div>
       )}
 
-      <main className="flex-1 flex overflow-hidden gap-6 px-6">
+      <main className="flex-1 flex flex-col lg:flex-row overflow-visible lg:overflow-hidden gap-3 lg:gap-6 px-3 sm:px-6 pb-4 lg:pb-0">
         {/* LEFT PANEL - PDF Preview (full height, no scroll) */}
         <div
           className={`flex flex-col study-panel rounded-2xl transition-all duration-300 shrink-0 ${
-            pdfCollapsed ? "w-12" : "w-[35%]"
+            pdfCollapsed ? "hidden lg:flex lg:w-12" : "w-full lg:w-[35%] h-[42vh] lg:h-auto"
           }`}
         >
           {/* PDF Header */}
           {!pdfCollapsed && (
-            <div className="border-b p-4 study-divider shrink-0">
+            <div className="border-b p-3 sm:p-4 study-divider shrink-0">
               <h3 className="font-bold text-sm mb-2">PDF Preview</h3>
               <p className="text-xs study-text-muted">
                 Page content will appear here after explanation
@@ -752,7 +754,7 @@ try {
 
           {/* PDF Content Area */}
           {!pdfCollapsed && (
-            <div className="flex-1 overflow-hidden p-4 flex items-center justify-center">
+            <div className="flex-1 overflow-hidden p-2 sm:p-4 flex items-center justify-center min-h-0">
               {pdfPageImage ? (
                 <div className="study-card rounded-xl p-4 flex items-center justify-center w-full h-full">
                   <img
@@ -770,7 +772,7 @@ try {
           )}
 
           {/* Page Navigation Controls */}
-          <div className="border-t p-3 flex items-center justify-between gap-2 study-divider shrink-0">
+          <div className="border-t p-2 sm:p-3 flex items-center justify-between gap-2 study-divider shrink-0">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
@@ -803,12 +805,12 @@ try {
         </div>
 
         {/* RIGHT PANEL - ChatGPT style */}
-        <div className="flex-1 flex flex-col overflow-hidden rounded-2xl study-panel">
+        <div className="flex-1 flex flex-col overflow-hidden rounded-2xl study-panel min-h-[68vh] lg:min-h-0">
           {/* Scrollable content (explanation + messages) */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
             {/* Explanation Card */}
-            <div className="study-explanation-panel rounded-2xl p-6 mb-6">
-              <div className="flex items-center justify-between mb-4">
+            <div className="study-explanation-panel rounded-2xl p-4 sm:p-6 mb-6">
+              <div className="flex items-center justify-between gap-3 mb-4">
                 <h2 className="text-lg font-bold study-accent">Page Explanation</h2>
                 {!hasExplanation && !explanationLoading && (
                   <button
@@ -875,7 +877,7 @@ try {
                   }`}
                 >
                   <div
-                    className={`max-w-xs lg:max-w-2xl px-5 py-4 rounded-2xl text-[14.5px] ${
+                    className={`max-w-[86vw] sm:max-w-xs lg:max-w-2xl px-4 sm:px-5 py-3 sm:py-4 rounded-2xl text-[14.5px] ${
                       msg.role === "user"
                         ? "study-user-message rounded-br-none"
                         : "study-ai-message rounded-bl-none markdown-content"
@@ -904,13 +906,13 @@ try {
           </div>
 
           {/* Input Area */}
-          <div className="shrink-0 border-t p-4 study-divider bg-card/30">
+          <div className="shrink-0 border-t p-3 sm:p-4 study-divider bg-card/30">
             {chatSaveError && (
               <div className="mb-3 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive font-semibold">
                 {chatSaveError}
               </div>
             )}
-            <form onSubmit={handleSendDoubt} className="flex gap-3">
+            <form onSubmit={handleSendDoubt} className="flex gap-2 sm:gap-3">
               <input
                 type="text"
                 value={inputValue}
@@ -921,7 +923,7 @@ try {
                     : "Get explanation first..."
                 }
                 disabled={isLoading || !chatEnabled}
-                className="flex-1 rounded-2xl px-4 py-3 text-sm outline-none transition disabled:opacity-50 bg-[hsl(var(--chat-input))] text-[hsl(var(--chat-input-foreground))] border border-[hsl(var(--chat-input-border))] placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-ring/30"
+                className="min-w-0 flex-1 rounded-2xl px-4 py-3 text-sm outline-none transition disabled:opacity-50 bg-[hsl(var(--chat-input))] text-[hsl(var(--chat-input-foreground))] border border-[hsl(var(--chat-input-border))] placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-ring/30"
               />
               <button
                 type="submit"

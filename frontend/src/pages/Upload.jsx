@@ -60,22 +60,22 @@ export default function Upload() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-background text-foreground p-3 sm:p-6 relative overflow-hidden">
       <div className="absolute bottom-[-20%] left-[-10%] w-[55%] h-[55%] bg-primary/10 blur-[120px] rounded-full animate-pulse" />
       <div className="absolute top-[-10%] right-[-5%] w-[45%] h-[45%] bg-sky-600/10 blur-[110px] rounded-full" />
 
       <div className="max-w-2xl mx-auto relative z-10">
-        <div className="flex items-center justify-between mb-10">
+        <div className="flex items-center justify-between gap-3 mb-8 sm:mb-10">
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
+            className="flex items-center gap-2 text-sm sm:text-base text-muted-foreground hover:text-primary transition-colors"
           >
             <ArrowLeft size={20} /> Back to Home
           </button>
           <ThemeToggle />
         </div>
 
-        <div className="text-center mb-10">
+        <div className="text-center mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-3 group mb-6">
             <div className="bg-gradient-to-br from-primary to-sky-600 p-2 rounded-xl">
               <BrainCircuit className="text-primary-foreground w-6 h-6" />
@@ -84,16 +84,16 @@ export default function Upload() {
               StudyMate<span className="text-primary">.ai</span>
             </span>
           </div>
-          <h1 className="text-4xl font-black mb-2">Upload Your PDF</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl sm:text-4xl font-black mb-2">Upload Your PDF</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Share your book, notes, or research paper. AI will break it down for you.
           </p>
         </div>
 
-        <div className="sm-card p-12">
-          <form onSubmit={handleUpload} className="space-y-8">
+        <div className="sm-card p-4 sm:p-8 lg:p-12">
+          <form onSubmit={handleUpload} className="space-y-6 sm:space-y-8">
             <div
-              className="border-2 border-dashed border-border rounded-2xl p-12 text-center hover:border-primary transition-colors cursor-pointer bg-card/40"
+              className="border-2 border-dashed border-border rounded-2xl p-6 sm:p-12 text-center hover:border-primary transition-colors cursor-pointer bg-card/40"
               onDragOver={(e) => {
                 e.preventDefault();
                 e.currentTarget.classList.add("border-primary");
@@ -120,8 +120,8 @@ export default function Upload() {
                 disabled={isLoading}
               />
               <label htmlFor="pdfInput" className="cursor-pointer">
-                <UploadIcon className="w-16 h-16 mx-auto mb-4 text-primary" />
-                <p className="text-lg font-bold mb-2">
+                <UploadIcon className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 text-primary" />
+                <p className="text-base sm:text-lg font-bold mb-2 break-words">
                   {file ? file.name : "Drop your PDF here"}
                 </p>
                 <p className="text-muted-foreground text-sm">
@@ -131,13 +131,13 @@ export default function Upload() {
             </div>
 
             {file && (
-              <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <div className="w-12 h-12 bg-primary/15 rounded-lg flex items-center justify-center">
                     <UploadIcon className="text-primary" size={24} />
                   </div>
-                  <div>
-                    <p className="font-bold">{file.name}</p>
+                  <div className="min-w-0">
+                    <p className="font-bold truncate">{file.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </p>

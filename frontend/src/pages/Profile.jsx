@@ -54,12 +54,12 @@ export default function Profile() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6">
+    <div className="min-h-screen bg-background text-foreground p-3 sm:p-6">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
+            className="flex items-center gap-2 text-sm sm:text-base text-muted-foreground hover:text-primary transition-colors"
           >
             <ArrowLeft size={18} /> Back
           </button>
@@ -68,19 +68,19 @@ export default function Profile() {
               onClick={fetchConversations}
               className="inline-flex items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2 text-sm font-bold hover:bg-card transition"
             >
-              <RefreshCw size={16} /> Refresh
+              <RefreshCw size={16} /> <span className="hidden sm:inline">Refresh</span>
             </button>
             <ThemeToggle />
           </div>
         </div>
 
-        <div className="sm-card p-8">
+        <div className="sm-card p-4 sm:p-8">
           <div className="flex items-start justify-between gap-4 mb-6">
-            <div>
+            <div className="min-w-0">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
                 {userName}'s Chats
               </h1>
-              <p className="text-muted-foreground mt-1">
+              <p className="text-sm sm:text-base text-muted-foreground mt-1">
                 Continue any saved conversation with your study material.
               </p>
             </div>
@@ -125,9 +125,9 @@ export default function Profile() {
                   onClick={() =>
                     navigate(`/study/${c.pdfId}?conversationId=${c.id}`)
                   }
-                  className="text-left rounded-3xl border border-border bg-card/40 hover:bg-card/70 transition p-5"
+                  className="text-left rounded-2xl sm:rounded-3xl border border-border bg-card/40 hover:bg-card/70 transition p-4 sm:p-5"
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-3">
                     <div className="min-w-0">
                       <p className="font-black truncate">{c.title || "Chat"}</p>
                       <p className="text-sm text-muted-foreground truncate mt-1">

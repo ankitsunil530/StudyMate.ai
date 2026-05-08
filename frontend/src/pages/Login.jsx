@@ -48,11 +48,11 @@ try {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-3 sm:p-6 relative overflow-hidden">
       <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-primary/10 blur-[120px] rounded-full animate-pulse" />
 
       <div className="w-full max-w-[450px] relative z-10">
-        <div className="text-center mb-8 relative">
+        <div className="text-center mb-6 sm:mb-8 relative">
           <div className="absolute right-0 top-0">
             <ThemeToggle />
           </div>
@@ -71,7 +71,7 @@ try {
           </p>
         </div>
 
-        <div className="sm-card p-10">
+        <div className="sm-card p-5 sm:p-10">
           {error && (
             <div className="mb-6 flex items-center gap-3 bg-destructive/10 border border-destructive/20 p-4 rounded-2xl">
               <AlertCircle size={20} className="text-destructive" />
