@@ -5,6 +5,7 @@ import {
   BrainCircuit,
   ChevronLeft,
   ChevronRight,
+  CheckCircle2,
   Send,
   Minimize2,
   Maximize2,
@@ -14,6 +15,8 @@ import {
   HelpCircle,
   BookOpen,
   FileText,
+  Network,
+  Target,
 } from "lucide-react";
 import { API_BASE_URL } from "../config/api";
 import ThemeToggle from "../components/ThemeToggle";
@@ -45,6 +48,10 @@ export default function Study() {
   const [conversationId, setConversationId] = useState(null);
   const conversationIdRef = useRef(null);
   const [chatSaveError, setChatSaveError] = useState("");
+  const [conceptMap, setConceptMap] = useState({ nodes: [], links: [] });
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizResult, setQuizResult] = useState(null);
+  const [quizSubmitLoading, setQuizSubmitLoading] = useState(false);
 
   // Load language from session
   useEffect(() => {
@@ -79,6 +86,7 @@ try {
         if (response.ok) {
           setPdfName(data.fileName || "Unknown PDF");
           setTotalPages(data.totalPages || 1);
+          setConceptMap(data.conceptMap || { nodes: [], links: [] });
         }
       } catch (err) {
         console.error("Error fetching PDF info:", err);
@@ -107,6 +115,7 @@ try {
           id: `${idx}-${m.createdAt || ""}`,
           role: m.role || "model",
           text: m.text || "",
+          grounding: m.grounding,
         }));
         setMessages(mapped);
       } catch {
@@ -283,6 +292,7 @@ try {
         text: response.ok
           ? data.answer || "Unable to generate answer."
           : `Error: ${data.error || "Failed to get response"}`,
+        grounding: data.grounding,
       };
       setMessages((prevMessages) => [...prevMessages, aiMessage]);
     } catch (err) {
@@ -325,6 +335,8 @@ try {
 }
       if (response.ok && data.quiz) {
         setQuiz(data.quiz);
+        setQuizAnswers({});
+        setQuizResult(null);
       } else {
         alert(data.error || "Failed to generate quiz");
       }
@@ -387,6 +399,43 @@ try {
         ? prev.filter((p) => p !== pageNum)
         : [...prev, pageNum]
     );
+  };
+
+  const submitQuizAttempt = async () => {
+    if (!quiz?.questions?.length) return;
+    const token = localStorage.getItem("userToken");
+    if (!token) {
+      setQuizResult({
+        error: "Login required to save mastery tracking.",
+      });
+      return;
+    }
+    setQuizSubmitLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/quiz-attempts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          pdf_id,
+          questions: quiz.questions,
+          answers: quizAnswers,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setQuizResult({ error: data.error || "Failed to save quiz attempt" });
+        return;
+      }
+      setQuizResult(data);
+    } catch (err) {
+      console.error("Quiz submit error:", err);
+      setQuizResult({ error: "Failed to save quiz attempt" });
+    } finally {
+      setQuizSubmitLoading(false);
+    }
   };
 
   const chatEnabled = hasExplanation || messages.length > 0 || !!conversationId;
@@ -461,6 +510,26 @@ try {
               </button>
             </div>
 
+            {!!conceptMap.nodes?.length && (
+              <div className="mb-6 rounded-2xl border border-border bg-card/40 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Network size={18} className="study-accent" />
+                  <p className="font-bold">Concept Map</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {conceptMap.nodes.slice(0, 10).map((node) => (
+                    <span
+                      key={node.id}
+                      className="rounded-full border border-border bg-card/70 px-3 py-1 text-xs font-semibold text-muted-foreground"
+                      title={`Pages ${(node.pages || []).join(", ")}`}
+                    >
+                      {node.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {!quiz ? (
               <div>
                 <p className="text-muted-foreground mb-4">
@@ -519,34 +588,91 @@ try {
                     key={idx}
                     className="bg-card/40 border border-border rounded-xl p-4"
                   >
+                    <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="rounded-full bg-primary/10 px-2 py-1 font-bold text-primary">
+                        {q.topic || "General"}
+                      </span>
+                      <span className="rounded-full border border-border px-2 py-1">
+                        {q.difficulty || "medium"}
+                      </span>
+                    </div>
                     <p className="font-bold mb-3 text-foreground">
                       {idx + 1}. {q.question}
                     </p>
                     <div className="space-y-2 mb-3">
                       {Object.entries(q.options || {}).map(([key, value]) => (
-                        <div
+                        <button
                           key={key}
-                          className={`p-2 rounded-lg ${
-                            key === q.correct_answer
-                              ? "bg-emerald-500/15 border-2 border-emerald-500/50"
-                              : "bg-card/30 border-2 border-border"
+                          type="button"
+                          onClick={() =>
+                            setQuizAnswers((prev) => ({ ...prev, [idx]: key }))
+                          }
+                          className={`w-full text-left p-2 rounded-lg border-2 transition ${
+                            quizAnswers[idx] === key
+                              ? "border-primary bg-primary/10"
+                              : "border-border bg-card/30 hover:border-primary/60"
+                          } ${
+                            quizResult && key === q.correct_answer
+                              ? "border-emerald-500/50 bg-emerald-500/15"
+                              : ""
                           }`}
                         >
                           <span className="font-bold mr-2">{key}.</span>
                           {value}
-                          {key === q.correct_answer && (
+                          {quizResult && key === q.correct_answer && (
                             <span className="ml-2 text-green-400">✓ Correct</span>
                           )}
-                        </div>
+                        </button>
                       ))}
                     </div>
-                    {q.explanation && (
+                    {quizResult && q.explanation && (
                       <p className="text-sm text-muted-foreground italic">
                         {q.explanation}
                       </p>
                     )}
                   </div>
                 ))}
+                <button
+                  type="button"
+                  onClick={submitQuizAttempt}
+                  disabled={
+                    quizSubmitLoading ||
+                    Object.keys(quizAnswers).length < (quiz.questions?.length || 0)
+                  }
+                  className="w-full bg-primary hover:opacity-95 disabled:opacity-50 text-primary-foreground font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  {quizSubmitLoading ? (
+                    <>
+                      <Loader className="animate-spin" size={20} />
+                      Saving Mastery...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={20} />
+                      Submit & Track Mastery
+                    </>
+                  )}
+                </button>
+                {quizResult?.attempt && (
+                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                    <p className="font-bold text-emerald-300">
+                      Score: {quizResult.attempt.score}/{quizResult.attempt.total} (
+                      {quizResult.attempt.accuracy}%)
+                    </p>
+                    {!!quizResult.recommendations?.length && (
+                      <ul className="mt-2 list-disc pl-5 text-sm text-muted-foreground">
+                        {quizResult.recommendations.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {quizResult?.error && (
+                  <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
+                    {quizResult.error}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -854,6 +980,25 @@ try {
               )}
             </div>
 
+            {!!conceptMap.nodes?.length && (
+              <div className="rounded-2xl border border-border bg-card/40 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Target size={18} className="study-accent" />
+                  <h3 className="font-bold study-accent">Concepts on This PDF</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {conceptMap.nodes.slice(0, 16).map((node) => (
+                    <span
+                      key={node.id}
+                      className="rounded-full border border-border bg-card/70 px-3 py-1 text-xs font-semibold text-muted-foreground"
+                    >
+                      {node.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Chat Messages */}
             {messages.length === 0 && !isLoading ? (
                 <div className="flex items-center justify-center h-full text-center">
@@ -886,7 +1031,30 @@ try {
                     {msg.role === "user" ? (
                       msg.text
                     ) : (
-                      <ReactMarkdown>{msg.text}</ReactMarkdown>
+                      <>
+                        {msg.grounding && (
+                          <div className="mb-3 flex flex-wrap gap-2 text-xs">
+                            <span className="rounded-full bg-primary/10 px-2 py-1 font-bold text-primary">
+                              {msg.grounding.doubt_type || "conceptual"}
+                            </span>
+                            <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">
+                              Confidence: {msg.grounding.confidence || "medium"}
+                            </span>
+                            {!!msg.grounding.source_pages?.length && (
+                              <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">
+                                Source: Page {msg.grounding.source_pages.join(", ")}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <ReactMarkdown>{msg.text}</ReactMarkdown>
+                        {msg.grounding?.source_evidence && (
+                          <div className="mt-3 rounded-xl border border-border bg-card/30 p-3 text-xs text-muted-foreground">
+                            <span className="font-bold">Evidence:</span>{" "}
+                            {msg.grounding.source_evidence}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
