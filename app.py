@@ -1018,9 +1018,29 @@ def learning_dashboard():
             "strongTopics": strong_topics,
             "recentAttempts": [_serialize_attempt(a) for a in attempts[:8]],
             "recommendations": [
-                f"Revise {topic['topic']} with a revision pack and retry a short quiz."
-                for topic in weak_topics[:3]
-            ] or ["Upload a PDF, explain 2 pages, and attempt one quiz to start mastery tracking."],
+                {
+                    "topic": topic["topic"],
+                    "priority": "High" if index == 0 else "Medium",
+                    "title": (
+                        f"Rebuild {topic['topic']} from the basics"
+                        if index == 0
+                        else f"Strengthen {topic['topic']}"
+                    ),
+                    "action": (
+                        "Open the related pages, generate a revision pack, then retry a 5-question quiz."
+                        if index == 0
+                        else "Review the explanation, write a short recall note, and test the topic again."
+                    ),
+                    "accuracy": topic["accuracy"],
+                    "correct": topic["correct"],
+                    "total": topic["total"],
+                }
+                for index, topic in enumerate(weak_topics[:3])
+            ] or [{
+                "title": "Start your mastery tracking",
+                "action": "Upload a PDF, explain two pages, and attempt one short quiz.",
+                "priority": "Next step",
+            }],
         }), 200
     except Exception as e:
         print("ERROR:", e)

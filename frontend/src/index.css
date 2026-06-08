@@ -108,16 +108,28 @@
     min-height: 100vh;
     font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
       Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    background-image:
+      radial-gradient(circle at 8% 0%, hsl(var(--primary) / 0.08), transparent 28rem),
+      radial-gradient(circle at 92% 12%, hsl(259 94% 66% / 0.06), transparent 30rem);
+    background-attachment: fixed;
   }
 
   ::selection {
     background: hsl(var(--primary) / 0.22);
   }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
 }
 
 @layer components {
   .sm-card {
-    @apply rounded-3xl border border-border bg-card/70 shadow-sm backdrop-blur-xl;
+    @apply rounded-3xl border border-border/80 bg-card/80 shadow-[0_18px_60px_-32px_hsl(var(--foreground)/0.28)] backdrop-blur-xl;
   }
 
   .sm-input {
@@ -130,6 +142,14 @@
 
   .sm-btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-card/50 px-4 py-3 text-sm font-bold text-foreground transition hover:bg-card/80 active:scale-[0.99] disabled:opacity-50;
+  }
+
+  .sm-panel {
+    @apply rounded-2xl border border-border/80 bg-card/55 shadow-[0_12px_36px_-28px_hsl(var(--foreground)/0.28)];
+  }
+
+  .sm-eyebrow {
+    @apply text-xs font-black uppercase tracking-[0.16em] text-muted-foreground;
   }
 }
 
